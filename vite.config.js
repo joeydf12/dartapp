@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false, // registratie gebeurt in src/main.jsx (herlaadt bij een nieuwe versie)
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Mijn Darts',
@@ -22,7 +23,7 @@ export default defineConfig({
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: { navigateFallback: '/index.html' },
+      workbox: { navigateFallback: '/index.html', cleanupOutdatedCaches: true, clientsClaim: true, skipWaiting: true },
     }),
   ],
   test: { environment: 'node' },

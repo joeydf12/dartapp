@@ -2,6 +2,15 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import { registerSW } from 'virtual:pwa-register'
+
+// Nieuwe versie online? Dan direct overschakelen (en elk uur even controleren).
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+  registerSW({
+    immediate: true,
+    onRegisteredSW(_url, reg) { if (reg) setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000) },
+  })
+}
 
 // Vangt onverwachte fouten op: liever een duidelijke melding dan een wit scherm.
 class ErrorBoundary extends React.Component {
