@@ -294,3 +294,78 @@ table.vs td.better { color:var(--blue); }
 .key.ck small { font-size:.6rem; font-weight:600; opacity:.75; }
 .key.ck.scoring { border-color:#22c55e; background:#0f3a24; }
 .key.ck.closed, .key.ck.dead { opacity:.45; }
+
+/* ── Nieuw spel ───────────────────────────────────────────────────────── */
+.gamecards { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+.gamecard { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; text-align:left; cursor:pointer;
+  display:flex; flex-direction:column; gap:4px; transition:border-color .15s, background .15s; min-height:110px; }
+.gamecard b { font-size:1rem; }
+.gamecard span:last-child { font-size:.75rem; color:var(--muted); line-height:1.35; }
+.gamecard .gc-ico { font-size:1.5rem; }
+.gamecard.on { border-color:var(--orange); background:linear-gradient(135deg, rgba(249,115,22,.16), var(--card) 70%); }
+.plist { display:flex; flex-direction:column; gap:6px; }
+.prow { display:grid; grid-template-columns:26px 1fr auto auto; align-items:center; gap:8px; background:var(--card2); border-radius:12px; padding:6px 8px; min-height:48px; }
+.prow select { background:#0a101c; border:1px solid var(--line); border-radius:10px; padding:8px; color:var(--text); max-width:190px; }
+.pnum { width:24px; height:24px; border-radius:50%; background:var(--bg); display:grid; place-items:center; font-size:.75rem; font-weight:800; color:var(--muted); }
+.pname { font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.set-field { margin-bottom:12px; }
+.set-field:last-child { margin-bottom:0; }
+
+/* ── Dartbord ─────────────────────────────────────────────────────────── */
+.board-wrap { display:flex; justify-content:center; }
+.dartboard { display:block; touch-action:manipulation; user-select:none; }
+.dartboard .seg { cursor:pointer; stroke:#0b0f19; stroke-width:.8; transition:filter .1s; }
+.dartboard .seg:hover { filter:brightness(1.25); }
+.dartboard .seg.flash { filter:brightness(1.8) saturate(1.4); }
+.dartboard .seg.hl { stroke:#facc15; stroke-width:3; }
+.dartboard .seg.miss { fill:#111827; }
+.dartboard.heat .seg { cursor:default; stroke:var(--bg); }
+.dartboard .bnum { fill:#cbd5e1; font-size:15px; font-weight:800; pointer-events:none; }
+.seg-toggle { display:grid; grid-template-columns:1fr 1fr; gap:4px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:3px; }
+.seg-toggle button { background:none; border:0; border-radius:9px; padding:7px; font-weight:600; color:var(--muted); cursor:pointer; min-height:36px; }
+.seg-toggle button.on { background:var(--card2); color:var(--text); }
+
+/* ── Spelen ───────────────────────────────────────────────────────────── */
+.board.multi { grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
+.board.multi .side .rem { font-size:clamp(1.8rem, 9vw, 2.6rem); }
+.mini-turns { display:flex; gap:3px; justify-content:center; margin-top:4px; }
+.mini-turns .ts { font-size:.7rem; padding:1px 6px; }
+.ondouble.warnbg { background:#3b2a0b; color:#fde68a; }
+.key.hit { background:#0f3a24; border-color:#16a34a; color:#bbf7d0; }
+.key.voice { height:auto; min-width:52px; font-size:1.1rem; }
+.key.voice.on { background:#7f1d1d; border-color:#ef4444; animation:pulse 1s infinite; }
+@keyframes pulse { 50% { opacity:.6 } }
+.display-row { grid-template-columns:auto 1fr auto; }
+.display-row:has(> :only-child) { grid-template-columns:1fr; }
+.progress { height:6px; background:var(--card2); border-radius:6px; overflow:hidden; }
+.progress span { display:block; height:100%; background:var(--green); transition:width .3s; }
+.more-input { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 10px; }
+.more-input summary { cursor:pointer; color:var(--blue); font-size:.85rem; font-weight:600; }
+.more-input[open] summary { margin-bottom:8px; }
+.attempts, .halve-rounds { display:flex; flex-wrap:wrap; gap:4px; justify-content:center; }
+.killer-list { display:flex; flex-direction:column; gap:6px; }
+.killer-row { display:grid; grid-template-columns:52px 1fr auto; align-items:center; gap:8px; background:var(--card); border:2px solid var(--line); border-radius:12px; padding:8px 10px; }
+.killer-row.active { border-color:var(--orange); }
+.killer-row.dead { opacity:.4; text-decoration:line-through; }
+.killer-row .kn { font-weight:800; font-size:1.1rem; color:var(--blue); }
+.killer-row .kname { font-weight:600; }
+.table-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+table.vs th:first-child { text-align:left; }
+.review { margin:6px 0 12px; }
+.review-head { font-weight:700; font-size:.85rem; margin-bottom:4px; }
+.review-table td { font-weight:400; }
+.clickrow { cursor:pointer; }
+.clickrow:hover td { background:var(--card2); }
+
+/* ── Liggend / tablet: scorebord links, invoer rechts ───────────────────── */
+@media (min-width:820px) and (orientation:landscape) {
+  .screen { max-width:1100px; }
+  .screen:has(.pad-wrap) { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-content:start; column-gap:20px; }
+  .screen:has(.pad-wrap) > .topbar { grid-column:1 / -1; }
+  .screen:has(.pad-wrap) > * { grid-column:1; }
+  .screen:has(.pad-wrap) > .pad-wrap, .screen:has(.pad-wrap) > .overlay, .screen:has(.pad-wrap) > div:has(> .pad-wrap) { grid-column:2; grid-row:2 / span 8; }
+  .gamecards { grid-template-columns:repeat(3,1fr); }
+}
+@media (min-width:820px) {
+  .gamecards { grid-template-columns:repeat(3,1fr); }
+}

@@ -28,7 +28,7 @@ describe('scherm: X01 tegen bot, totaalinvoer', () => {
     expect(screen.getAllByText('501').length).toBe(2)
     fireEvent.click(btn('100'))
     expect(screen.getByText('401')).toBeTruthy()
-    expect(screen.getByText(/Bot gooit/)).toBeTruthy()
+    expect(screen.getByText(/gooit…/)).toBeTruthy()
     await tick(1000)
     expect(loadActive().inputs.length).toBe(2)
     fireEvent.click(btn(/Ongedaan/))
@@ -152,8 +152,8 @@ describe('scherm: andere spellen', () => {
   })
   it('around the clock tegen bot: raak telt, bot reageert', async () => {
     start({ kind: 'around_clock', mode: 'bot', botLevel: 10, config: { starter: 'me' } })
-    fireEvent.click(btn(/Raak 1/)); fireEvent.click(btn(/Raak 2/)); fireEvent.click(btn('Mis'))
-    expect(screen.getByText('2 / 21 gehaald')).toBeTruthy()
+    fireEvent.click(btn(/Raak 1/)); fireEvent.click(btn(/Raak 2/)); fireEvent.click(screen.getAllByRole('button', { name: 'Mis' })[0])
+    expect(screen.getByText(/2/21 ·/)).toBeTruthy()
     await tick(1000)
     expect(loadActive().inputs.length).toBe(2)
   })
@@ -177,7 +177,8 @@ describe('statistieken', () => {
     const data = { games: [p.game], turns: p.turns.map(t => ({ ...t, gameId: g.id })) }
     api.getData.mockResolvedValue(data)
     vi.useRealTimers()
-    render(<Stats />)
+    render(<Stats user={user} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'X01' }))
     expect(await screen.findByText('Uitgooien')).toBeTruthy()
     expect(screen.getAllByText('33%').length).toBeGreaterThan(0)   // 1 van 3 dubbelkansen
   })

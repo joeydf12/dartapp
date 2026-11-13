@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { loadActive, outboxCount, flush, loadPrefs, saveActive } from '../lib/store.js'
-import { replayGame, KINDS, MODE_LABEL, newGame } from '../lib/model.js'
+import { replayGame, KINDS, newGame } from '../lib/model.js'
 import { useData } from '../lib/data.js'
 import { profileSummary, fmt, fmtPct } from '../lib/statsAgg.js'
 import { Screen, Card, go, dateNl } from '../components/ui.jsx'
@@ -27,7 +27,7 @@ export default function Home({ user }) {
     try {
       const v = replayGame(active)
       finished = v.finished
-      activeInfo = `${KINDS[active.kind]?.label.split(' (')[0]} · ${MODE_LABEL[active.mode]}${active.opponentName ? ` · ${active.opponentName}` : ''} · ${v.turns.length} beurten`
+      activeInfo = `${KINDS[active.kind]?.short || active.kind}${active.opponentName ? ` · vs ${active.opponentName}` : ''} · ${v.turns.length} beurten`
     } catch { activeInfo = 'Lopend spel' }
   }
 
@@ -76,7 +76,7 @@ export default function Home({ user }) {
         <Card title="Laatste spellen" right={<button className="btn ghost small" onClick={() => go('/history')}>Alles ›</button>}>
           {recent.map(g => (
             <div key={g.id} className="list-item compact">
-              <div><b>{KINDS[g.kind]?.label.split(' (')[0]}</b> <span className="muted">· {MODE_LABEL[g.mode]}{g.opponentName ? ` · ${g.opponentName}` : ''}</span><div className="muted small">{dateNl(g.startedAt)}</div></div>
+              <div>{KINDS[g.kind]?.icon} <b>{KINDS[g.kind]?.short || g.kind}</b> <span className="muted">{g.opponentName ? `· vs ${g.opponentName}` : ''}</span><div className="muted small">{dateNl(g.startedAt)}</div></div>
               {resultTag(g)}
             </div>
           ))}

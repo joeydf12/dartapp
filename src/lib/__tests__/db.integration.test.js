@@ -65,6 +65,17 @@ describe.skipIf(!run)('database (echte Supabase)', () => {
     expect(data.games.find(g => g.kind === 'cricket').botLevel).toBe(3)
   })
 
+  it('nieuwe spelsoorten en bot-niveau 15 worden geaccepteerd (migratie 003)', async () => {
+    let k = newGame({ kind: 'killer', players: [{ id: 'me', name: 'Ik', type: 'me' }, { id: 'b', name: 'Bot 15', type: 'bot', botLevel: 15 }] })
+    k = withInput(k, { darts: [T(0, 0), T(0, 0), T(0, 0)] })
+    let s = newGame({ kind: 'checkout121', players: [{ id: 'me', name: 'Ik', type: 'me' }] })
+    s = withInput(s, { mode: 'total', score: 60 })
+    for (const g of [k, s]) { const p = toPayload(g); const r = await api.syncGame(p.game, p.turns); expect(r.ok).toBe(true) }
+    const data = await api.getData()
+    expect(data.games.find(g => g.kind === 'killer').botLevel).toBe(15)
+    await api.deleteGame(k.id); await api.deleteGame(s.id)
+  })
+
   it('spel verwijderen, backup terugzetten', async () => {
     const backup = await api.getData()
     await api.deleteGame(x01.id)

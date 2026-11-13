@@ -19,12 +19,14 @@ export const PERIODS = [
   { value: '90', label: '3 mnd' }, { value: '365', label: 'Jaar' },
 ]
 
-export function filterGames(data, { kind = 'x01', mode = 'all', period = 'all', startScore = 'all' } = {}) {
+export const outModeOf = g => g.config?.out || (g.config?.doubleOut === false ? 'straight' : 'double')
+export function filterGames(data, { kind = 'x01', mode = 'all', period = 'all', startScore = 'all', out = 'all' } = {}) {
   const since = period === 'all' ? null : Date.now() - Number(period) * 864e5
   return (data?.games || []).filter(g =>
     g.kind === kind && (mode === 'all' || g.mode === mode) &&
     (!since || new Date(g.startedAt).getTime() >= since) &&
-    (kind !== 'x01' || startScore === 'all' || g.config?.startScore === Number(startScore)))
+    (kind !== 'x01' || startScore === 'all' || g.config?.startScore === Number(startScore)) &&
+    (kind !== 'x01' || out === 'all' || outModeOf(g) === out))
 }
 
 function overviewOf(games) {
@@ -64,8 +66,13 @@ export function buildStats(data, filter = {}) {
   const finished = games.filter(g => g.finishedAt)
   const base = { kind, overview: overviewOf(games), games, opponents: opponents(finished), empty: mine.length === 0 }
   if (kind === 'cricket') return { ...base, cricket: cricketStats(games, mine) }
-  if (kind === 'around_clock') return { ...base, clock: clockStats(games, mine) }
+  if (kind === 'around_clock' || kind === 'doubles') return { ...base, clock: clockStats(games, mine) }
   if (kind === 'bobs27') return { ...base, bobs: bobsStats(games, mine) }
+  if (kind === 'singles' || kind === 'shanghai') return { ...base, rounds: roundsStats(games, mine, kind) }
+  if (kind === 'score_training') return { ...base, score: scoreStats(games, mine) }
+  if (['checkout121', 'checkout170', 'catch40', 'random_checkout'].includes(kind)) return { ...base, empty: !games.some(g => g.summary?.list?.length), co: checkoutStats(games) }
+  if (kind === 'halve_it') return { ...base, halve: halveStats(games, mine) }
+  if (kind === 'killer') return { ...base, empty: !games.length, killer: { games: games.length } }
   return { ...base, ...x01Stats(games, mine) }
 }
 
@@ -130,6 +137,7 @@ function x01Stats(games, mine) {
     bestAvg: best(perGame, x => x.avg3), bestFirst9: best(perGame, x => x.first9),
     most180: best(perGame.filter(x => x.s180 > 0), x => x.s180), bestLeg: legDarts.length ? Math.min(...legDarts) : null,
   }
+  const ranked = [...perGame].filter(x => x.avg3 != null).sort((a, b) => b.avg3 - a.avg3)
   const recent = perGame.slice(-10)
   const form = { recentAvg: mean(recent.map(x => x.avg3)), allAvg: s.avg3, n: recent.length }
 
@@ -179,7 +187,8 @@ function x01Stats(games, mine) {
   })
 
   return {
-    stats: s, bust: s.busts, bustPct: pct(s.busts, s.turns),
+    stats: s, bust: s.busts, bustPct: pct(s.busts, s.turns), ppd: s.darts ? s.points / s.darts : null,
+    top25: ranked.slice(0, 25), bottom25: ranked.slice(-25).reverse(),
     extra: { byDarts, dartsPerCheckout: outs.length ? doubleDarts / outs.length : null, after9: mean(after9), after9n: after9.length, visit, perStart },
     checkout: { doubleDarts, doubleHits, dartPct: pct(doubleHits, doubleDarts), chances: chances.length, turnPct: pct(s.checkouts, chances.length), byRange, top: topCheckouts },
     legs: { won: wonLegs.length, played: legs.size, avgDarts: mean(legDarts), best: records.bestLeg, worst: legDarts.length ? Math.max(...legDarts) : null, dist: legDist },
@@ -190,7 +199,8 @@ function x01Stats(games, mine) {
 
 // ── Andere spellen ──────────────────────────────────────────────────────────
 function cricketStats(games, mine) {
-  const marksOf = t => sum(t.darts || [], d => (d.m > 0 && CRICKET_NUMBERS.includes(d.n) ? (d.n === 25 ? Math.min(d.m, 2) : d.m) : 0))
+  const numsOf = new Map(games.map(g => [g.id, g.config?.numbers || CRICKET_NUMBERS]))
+  const marksOf = t => sum(t.darts || [], d => (d.m > 0 && (numsOf.get(t.gameId) || CRICKET_NUMBERS).includes(d.n) ? (d.n === 25 ? Math.min(d.m, 2) : d.m) : 0))
   const perGame = games.map(g => {
     const own = mine.filter(t => t.gameId === g.id)
     if (!own.length) return null
@@ -208,14 +218,84 @@ function cricketStats(games, mine) {
 }
 
 function clockStats(games, mine) {
-  const done = games.filter(g => g.mode === 'solo' && g.finishedAt && g.summary?.progressMe >= 21)
+  const done = games.filter(g => g.mode === 'solo' && g.finishedAt && g.summary?.progressMe >= (g.summary?.total || 21))
+  const perTarget = {}
+  for (const g of games) for (const [t, o] of Object.entries(g.summary?.perTarget || {})) { const x = perTarget[t] ||= { attempted: 0, hit: 0 }; x.attempted += o.attempted; x.hit += o.hit }
   const dartsPerGame = done.map(g => g.summary.dartsMe).filter(Number.isFinite)
   const all = mine.flatMap(t => t.darts || [])
   return {
     done: done.length, best: dartsPerGame.length ? Math.min(...dartsPerGame) : null, avg: mean(dartsPerGame),
     hitPct: pct(all.filter(d => d.points > 0).length, all.length), darts: all.length,
-    perGame: done.map(g => ({ at: g.startedAt, darts: g.summary.dartsMe })),
+    perGame: done.map(g => ({ at: g.startedAt, darts: g.summary.dartsMe })), perTarget,
   }
+}
+
+function roundsStats(games, mine, kind) {
+  const fin = games.filter(g => g.finishedAt)
+  const scores = fin.map(g => { const own = mine.filter(t => t.gameId === g.id); return { at: g.startedAt, score: sum(own, t => t.score), rounds: own.length } }).filter(x => x.rounds)
+  const darts = mine.flatMap(t => t.darts || [])
+  const hits = darts.filter(d => d.points > 0)
+  return {
+    games: scores.length, best: scores.length ? Math.max(...scores.map(x => x.score)) : null, avg: mean(scores.map(x => x.score)),
+    hitPct: pct(hits.length, darts.length), trebles: hits.filter(d => d.m === 3).length, doubles: hits.filter(d => d.m === 2).length, darts: darts.length,
+    perGame: scores, wins: kind === 'shanghai' ? fin.filter(g => g.result === 'won').length : null,
+  }
+}
+
+function scoreStats(games, mine) {
+  const perGame = games.map(g => { const own = mine.filter(t => t.gameId === g.id); const d = sum(own, t => t.dartsThrown); return own.length ? { at: g.startedAt, avg: d ? (sum(own, t => t.score) / d) * 3 : null } : null }).filter(Boolean)
+  const d = sum(mine, t => t.dartsThrown)
+  return {
+    turns: mine.length, avg: d ? (sum(mine, t => t.score) / d) * 3 : null, best: perGame.length ? Math.max(...perGame.map(x => x.avg ?? 0)) : null,
+    high: mine.length ? Math.max(...mine.map(t => t.score)) : null, s100: mine.filter(t => t.score >= 100).length, s140: mine.filter(t => t.score >= 140).length, s180: mine.filter(t => t.score === 180).length, perGame,
+  }
+}
+
+function checkoutStats(games) {
+  const all = games.flatMap(g => (g.summary?.list || []).map(([target, ok, darts]) => ({ target, ok: !!ok, darts, at: g.startedAt })))
+  const per = {}
+  for (const a of all) { const o = per[a.target] ||= { attempted: 0, hit: 0 }; o.attempted++; if (a.ok) o.hit++ }
+  const RANGES = [[2, 40], [41, 80], [81, 120], [121, 170]]
+  const byRange = RANGES.map(([lo, hi]) => { const r = all.filter(a => a.target >= lo && a.target <= hi); const h = r.filter(a => a.ok).length; return { label: lo + '–' + hi, n: r.length, hit: h, pct: pct(h, r.length) } }).filter(r => r.n)
+  const perGame = games.filter(g => g.summary?.attempts).map(g => ({ at: g.startedAt, pct: g.summary.pct != null ? g.summary.pct * 100 : null }))
+  const ok = all.filter(a => a.ok)
+  return {
+    attempts: all.length, successes: ok.length, pct: pct(ok.length, all.length), avgDarts: mean(ok.map(a => a.darts)),
+    highest: Math.max(0, ...games.map(g => g.summary?.highest || 0)) || null, bestPoints: Math.max(0, ...games.map(g => g.summary?.points || 0)) || null,
+    per, byRange, perGame,
+    hardest: Object.entries(per).filter(([, o]) => o.attempted >= 2).map(([t, o]) => ({ t: Number(t), ...o, pct: o.hit / o.attempted })).sort((a, b) => a.pct - b.pct).slice(0, 8),
+  }
+}
+
+function halveStats(games, mine) {
+  const fin = games.filter(g => g.finishedAt)
+  const scores = fin.map(g => { const own = mine.filter(t => t.gameId === g.id); return own.length ? { at: g.startedAt, score: g.summary?.scoreMe ?? null } : null }).filter(x => x && x.score != null)
+  return { games: fin.length, best: scores.length ? Math.max(...scores.map(x => x.score)) : null, avg: mean(scores.map(x => x.score)), okPct: pct(mine.filter(t => t.score > 0).length, mine.length), perGame: scores }
+}
+
+// ── Spelsoorten vergelijken ─────────────────────────────────────────────────
+export function compareKinds(data, kinds) {
+  return Object.entries(kinds).map(([kind, meta]) => {
+    const games = (data?.games || []).filter(g => g.kind === kind)
+    if (!games.length) return null
+    const fin = games.filter(g => g.finishedAt)
+    const won = fin.filter(g => g.result === 'won').length, lost = fin.filter(g => g.result === 'lost').length
+    const last = games.reduce((a, g) => (g.startedAt > a ? g.startedAt : a), '')
+    return { kind, label: meta.short || meta.label, games: games.length, winPct: pct(won, won + lost), last }
+  }).filter(Boolean).sort((a, b) => b.games - a.games)
+}
+
+// Heatmap: hoe vaak elk vak geraakt is (alle spellen waar per dart is ingevoerd).
+export function heatCounts(data, kind = 'all', period = 'all') {
+  const since = period === 'all' ? null : Date.now() - Number(period) * 864e5
+  const ids = new Set((data?.games || []).filter(g => (kind === 'all' || g.kind === kind) && (!since || new Date(g.startedAt).getTime() >= since)).map(g => g.id))
+  const counts = {}
+  let total = 0, miss = 0
+  for (const t of data?.turns || []) {
+    if (t.side !== 'me' || !ids.has(t.gameId)) continue
+    for (const d of t.darts || []) { total++; if (d.m === 0) { miss++; continue } const k = d.m + '-' + d.n; counts[k] = (counts[k] || 0) + 1 }
+  }
+  return { counts, total, miss }
 }
 
 function bobsStats(games, mine) {

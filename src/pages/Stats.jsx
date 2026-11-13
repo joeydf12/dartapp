@@ -1,29 +1,34 @@
 import React, { useMemo, useState } from 'react'
 import { useData } from '../lib/data.js'
-import { buildStats, profileSummary, fmt, fmtPct, PERIODS } from '../lib/statsAgg.js'
+import { buildStats, profileSummary, fmt, fmtPct, PERIODS, compareKinds, heatCounts } from '../lib/statsAgg.js'
 import { bandLabel } from '../lib/darts/stats.js'
-import { KINDS, MODE_LABEL } from '../lib/model.js'
+import { KINDS, MODE_LABEL, CATS } from '../lib/model.js'
+import Dartboard from '../components/Dartboard.jsx'
 import { Screen, Card, Stat, Chips, Tabs, dateNl, go } from '../components/ui.jsx'
 import { LineChart, BarChart, HBars, DoubleBoard } from '../components/charts.jsx'
 
-const KIND_TABS = Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label.split(' (')[0] }))
+const OUT_OPTS = [{ value: 'all', label: 'Elke uitgooi' }, { value: 'double', label: 'Dubbel uit' }, { value: 'master', label: 'Master uit' }, { value: 'straight', label: 'Straight uit' }]
 const X01_TABS = [
   { value: 'overview', label: 'Overzicht' }, { value: 'scoring', label: 'Scoren' }, { value: 'finish', label: 'Uitgooien' },
-  { value: 'darts', label: 'Per dart' }, { value: 'trend', label: 'Verloop' }, { value: 'records', label: 'Records' },
+  { value: 'darts', label: 'Per dart' }, { value: 'trend', label: 'Verloop' }, { value: 'records', label: 'Records' }, { value: 'top', label: 'Top 25' },
 ]
 const initials = n => (n || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
 const dLabel = n => (Number(n) === 25 ? 'Bull' : `D${n}`)
 
 export default function Stats({ user }) {
   const { data, err, loading, reload } = useData()
-  const [kind, setKind] = useState('x01')
+  const [kind, setKind] = useState('all')
+  const [out, setOut] = useState('all')
   const [mode, setMode] = useState('all')
   const [period, setPeriod] = useState('all')
   const [startScore, setStartScore] = useState('all')
   const [tab, setTab] = useState('overview')
 
   const prof = useMemo(() => (data ? profileSummary(data) : null), [data])
-  const st = useMemo(() => (data ? buildStats(data, { kind, mode, period, startScore }) : null), [data, kind, mode, period, startScore])
+  const st = useMemo(() => (data && kind !== 'all' ? buildStats(data, { kind, mode, period, startScore, out }) : null), [data, kind, mode, period, startScore, out])
+  const played = useMemo(() => new Set((data?.games || []).map(g => g.kind)), [data])
+  const kindOpts = [{ value: 'all', label: 'Alle spellen' }, ...Object.entries(KINDS).filter(([k]) => k === 'x01' || played.has(k)).map(([value, k]) => ({ value, label: k.short }))]
+  const modes = kind !== 'all' && KINDS[kind].players[1] > 1 ? ['solo', 'pvp', 'bot'].filter(m => m !== 'bot' || KINDS[kind].bot) : []
   const scores = useMemo(() => [...new Set((data?.games || []).filter(g => g.kind === 'x01').map(g => g.config?.startScore))].sort(), [data])
 
   return (
@@ -34,15 +39,17 @@ export default function Stats({ user }) {
 
       {data && (
         <>
-          <Tabs tabs={KIND_TABS} value={kind} onChange={k => { setKind(k); setMode('all') }} />
+          <Tabs tabs={kindOpts} value={kind} onChange={k => { setKind(k); setMode('all'); setTab('overview') }} />
           <div className="filters">
             <Chips small label="Periode" value={period} onChange={setPeriod} options={PERIODS} />
-            {KINDS[kind].modes.length > 1 && <Chips small label="Tegenstander" value={mode} onChange={setMode} options={[{ value: 'all', label: 'Alle' }, ...KINDS[kind].modes.map(m => ({ value: m, label: MODE_LABEL[m] }))]} />}
+            {modes.length > 0 && <Chips small label="Tegenstander" value={mode} onChange={setMode} options={[{ value: 'all', label: 'Alle' }, ...modes.map(m => ({ value: m, label: MODE_LABEL[m] }))]} />}
             {kind === 'x01' && scores.length > 1 && <Chips small label="Startscore" value={startScore} onChange={setStartScore} options={[{ value: 'all', label: 'Elke start' }, ...scores.map(s => ({ value: String(s), label: String(s) }))]} />}
+            {kind === 'x01' && <Chips small label="Uitgooien" value={out} onChange={setOut} options={OUT_OPTS} />}
           </div>
         </>
       )}
 
+      {data && kind === 'all' && <AllOverview data={data} period={period} onPick={k => setKind(k)} />}
       {st && st.empty && (
         <Card><div className="empty">🎯<div>Nog geen worpen met deze filters.</div><button className="btn primary" style={{ marginTop: 12 }} onClick={() => go('/new')}>Speel een spel</button></div></Card>
       )}
@@ -55,10 +62,16 @@ export default function Stats({ user }) {
           {tab === 'darts' && <X01Darts st={st} />}
           {tab === 'trend' && <X01Trend st={st} />}
           {tab === 'records' && <X01Records st={st} />}
+          {tab === 'top' && <X01Top st={st} />}
         </>
       )}
       {st && !st.empty && kind === 'cricket' && <CricketStats st={st} />}
-      {st && !st.empty && kind === 'around_clock' && <ClockStats st={st} />}
+      {st && !st.empty && (kind === 'around_clock' || kind === 'doubles') && <ClockStats st={st} kind={kind} />}
+      {st && !st.empty && (kind === 'singles' || kind === 'shanghai') && <RoundsStats st={st} kind={kind} />}
+      {st && !st.empty && kind === 'score_training' && <ScoreStats st={st} />}
+      {st && !st.empty && st.co && <CheckoutStats st={st} kind={kind} />}
+      {st && !st.empty && kind === 'halve_it' && <HalveStats st={st} />}
+      {st && !st.empty && kind === 'killer' && <SimpleOverview st={st} />}
       {st && !st.empty && kind === 'bobs27' && <BobsStats st={st} />}
     </Screen>
   )
@@ -126,6 +139,7 @@ function X01Overview({ st }) {
           <Stat accent label="3-dart gemiddelde" value={fmt(s.avg3)} />
           <Stat label="first 9" value={fmt(s.first9Avg)} />
           <Stat label="darts per leg" value={fmt(st.legs.avgDarts, 1)} />
+          <Stat label="PPD (punten per dart)" value={fmt(st.ppd, 2)} />
           <Stat accent label="uitgooi-% per kans" value={fmtPct(st.checkout.turnPct)} sub={`${s.checkouts}/${st.checkout.chances}`} />
           <Stat label="dubbel-% per dart" value={fmtPct(st.checkout.dartPct)} sub={`${st.checkout.doubleHits}/${st.checkout.doubleDarts}`} />
           <Stat label="hoogste uitgooi" value={s.highestCheckout ?? '–'} />
@@ -262,8 +276,13 @@ function X01Darts({ st }) {
   const d = st.dartStats
   if (!d) return <Card><div className="empty">🎯<div>Kies bij een spel <b>per dart</b> invoeren. Dan zie je hier hoe vaak je single, dubbel, treble of mis gooit, en waar je darts landen.</div></div></Card>
   const sc = d.scoring
+  const counts = {}
+  for (const x of d.segments) { if (x.s) counts[`1-${x.n}`] = x.s; if (x.d) counts[`2-${x.n}`] = x.d; if (x.t) counts[`3-${x.n}`] = x.t }
   return (
     <>
+      <Card title="Heatmap" right={<span className="muted small">lichter = vaker · tik/hover een vak</span>}>
+        <div className="board-wrap"><Dartboard counts={counts} /></div>
+      </Card>
       <Card title="Waar landen je darts">
         <div className="stats-grid">
           <Stat label="darts" value={d.total} />
@@ -344,11 +363,12 @@ function CricketStats({ st }) {
   )
 }
 
-function ClockStats({ st }) {
+function ClockStats({ st, kind }) {
   const c = st.clock
+  const doubles = kind === 'doubles'
   return (
     <>
-      <Card title="Around the Clock">
+      <Card title={doubles ? 'Doubles Training' : 'Around the Clock'}>
         <div className="stats-grid">
           <Stat label="uitgespeeld (solo)" value={c.done} />
           <Stat accent label="minste darts" value={c.best ?? '–'} />
@@ -357,6 +377,9 @@ function ClockStats({ st }) {
         </div>
       </Card>
       <Card title="Darts per spel (lager is beter)"><LineChart label="darts per spel" digits={0} points={c.perGame.map(p => ({ y: p.darts, at: p.at }))} refLine={c.avg} /></Card>
+      {Object.keys(c.perTarget || {}).length > 0 && (doubles
+        ? <Card title="Raak-% per dubbel"><DoubleBoard doubles={c.perTarget} /></Card>
+        : <Card title="Raak-% per doel"><HBars max={100} rows={Object.entries(c.perTarget).sort((a, b) => Number(a[0]) - Number(b[0])).map(([t, o]) => ({ label: t === '25' ? 'Bull' : t, value: (o.hit / o.attempted) * 100, text: fmtPct((o.hit / o.attempted) * 100) + ' · ' + o.hit + '/' + o.attempted }))} /></Card>)}
       <SimpleOverview st={st} />
     </>
   )
@@ -388,6 +411,112 @@ function SimpleOverview({ st }) {
     <>
       <Card title="Uitslagen"><div className="stats-grid"><Stat label="gewonnen" value={o.won} sub={fmtPct(o.winPct)} /><Stat label="verloren" value={o.lost} /><Stat label="langste reeks" value={o.bestStreak} /></div></Card>
       <Opponents list={st.opponents} />
+    </>
+  )
+}
+
+// ── Alle spellen ────────────────────────────────────────────────────────────
+function AllOverview({ data, period, onPick }) {
+  const rows = useMemo(() => compareKinds(data, KINDS), [data])
+  const heat = useMemo(() => heatCounts(data, 'all', period), [data, period])
+  return (
+    <>
+      <Card title="Per spelsoort">
+        {rows.length ? (
+          <table><thead><tr><th>Spel</th><th className="n">Gespeeld</th><th className="n">Winst</th><th className="n">Laatst</th></tr></thead>
+            <tbody>{rows.map(r => <tr key={r.kind} className="clickrow" onClick={() => onPick(r.kind)}><td><b>{r.label}</b> <span className="muted small">{CATS[KINDS[r.kind].cat]}</span></td><td className="n">{r.games}</td><td className="n">{fmtPct(r.winPct)}</td><td className="n small">{dateNl(r.last)}</td></tr>)}</tbody></table>
+        ) : <div className="muted">Nog geen spellen.</div>}
+        <div className="muted small" style={{ marginTop: 6 }}>Tik een spel voor alle details.</div>
+      </Card>
+      <Card title="Waar landen je darts" right={<span className="muted small">{heat.total} darts · {fmtPct((heat.miss / Math.max(1, heat.total)) * 100)} mis</span>}>
+        {heat.total ? <div className="board-wrap"><Dartboard counts={heat.counts} /></div> : <div className="muted small">Kies bij een spel <b>per dart</b> of <b>bord</b> invoeren, dan kleurt hier je bord: hoe lichter, hoe vaker geraakt.</div>}
+      </Card>
+    </>
+  )
+}
+
+function X01Top({ st }) {
+  const row = (x, i) => <tr key={x.id}><td className="n muted">{i + 1}</td><td>{dateNl(x.at)}<div className="muted small">{x.label}</div></td><td className="n"><b>{fmt(x.avg3)}</b></td><td className="n">{fmt(x.first9)}</td><td className="n">{x.darts}</td></tr>
+  const head = <thead><tr><th className="n">#</th><th>Spel</th><th className="n">Gem.</th><th className="n">F9</th><th className="n">Darts</th></tr></thead>
+  return (
+    <>
+      <Card title="Top 25 spellen (gemiddelde)"><div className="table-scroll"><table>{head}<tbody>{st.top25.map(row)}</tbody></table></div></Card>
+      {st.bottom25.length > 5 && <Card title="Bottom 25"><div className="table-scroll"><table>{head}<tbody>{st.bottom25.map(row)}</tbody></table></div></Card>}
+    </>
+  )
+}
+
+function RoundsStats({ st, kind }) {
+  const r = st.rounds
+  return (
+    <>
+      <Card title={kind === 'shanghai' ? 'Shanghai' : 'Singles Training'}>
+        <div className="stats-grid">
+          <Stat label="gespeeld" value={r.games} />
+          <Stat accent label="beste score" value={r.best ?? '–'} />
+          <Stat label="gemiddeld" value={fmt(r.avg, 0)} />
+          <Stat label="raak-%" value={fmtPct(r.hitPct)} sub={r.darts + ' darts'} />
+          <Stat label="trebles" value={r.trebles} />
+          <Stat label="dubbels" value={r.doubles} />
+        </div>
+      </Card>
+      <Card title="Score per spel"><LineChart label="score per spel" digits={0} points={r.perGame.map(p => ({ y: p.score, at: p.at }))} refLine={r.avg} /></Card>
+      <SimpleOverview st={st} />
+    </>
+  )
+}
+
+function ScoreStats({ st }) {
+  const s = st.score
+  return (
+    <>
+      <Card title="Score Training">
+        <div className="stats-grid">
+          <Stat accent label="gemiddelde" value={fmt(s.avg)} />
+          <Stat label="beste sessie" value={fmt(s.best)} />
+          <Stat label="hoogste beurt" value={s.high ?? '–'} />
+          <Stat label="100+" value={s.s100} />
+          <Stat label="140+" value={s.s140} />
+          <Stat label="180's" value={s.s180} />
+        </div>
+      </Card>
+      <Card title="Gemiddelde per sessie"><LineChart label="gemiddelde per sessie" points={s.perGame.map(p => ({ y: p.avg, at: p.at }))} refLine={s.avg} /></Card>
+    </>
+  )
+}
+
+function CheckoutStats({ st, kind }) {
+  const c = st.co
+  return (
+    <>
+      <Card title={KINDS[kind].label}>
+        <div className="stats-grid">
+          <Stat accent label="gelukt" value={fmtPct(c.pct)} sub={c.successes + '/' + c.attempts} />
+          <Stat label="darts per uitgooi" value={fmt(c.avgDarts, 1)} />
+          <Stat label={kind === 'catch40' ? 'beste score' : 'hoogste'} value={kind === 'catch40' ? (c.bestPoints ?? '–') : (c.highest ?? '–')} />
+        </div>
+      </Card>
+      {c.byRange.length > 1 && <Card title="Gelukt per bereik"><HBars max={100} rows={c.byRange.map(r => ({ label: r.label, value: r.pct ?? 0, text: fmtPct(r.pct) + ' · ' + r.hit + '/' + r.n }))} /></Card>}
+      {c.hardest.length > 0 && <Card title="Lastigste uitgooiers"><div className="pills">{c.hardest.map(h => <span key={h.t} className="pill">{h.t}<em>{h.hit}/{h.attempted}</em></span>)}</div></Card>}
+      <Card title="Gelukt per sessie"><LineChart label="gelukt per sessie" unit="%" digits={0} points={c.perGame.filter(p => p.pct != null).map(p => ({ y: p.pct, at: p.at }))} refLine={c.pct} /></Card>
+    </>
+  )
+}
+
+function HalveStats({ st }) {
+  const h = st.halve
+  return (
+    <>
+      <Card title="Halve-It">
+        <div className="stats-grid">
+          <Stat label="gespeeld" value={h.games} />
+          <Stat accent label="beste score" value={h.best ?? '–'} />
+          <Stat label="gemiddeld" value={fmt(h.avg, 0)} />
+          <Stat label="rondes gehaald" value={fmtPct(h.okPct)} />
+        </div>
+      </Card>
+      <Card title="Score per spel"><LineChart label="score per spel" digits={0} points={h.perGame.map(p => ({ y: p.score, at: p.at }))} refLine={h.avg} /></Card>
+      <SimpleOverview st={st} />
     </>
   )
 }

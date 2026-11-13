@@ -44,7 +44,7 @@ function page(route, user, setUser) {
     case '/new': return <NewGame user={user} />
     case '/play': return <Play user={user} />
     case '/stats': return <Stats user={user} />
-    case '/history': return <History />
+    case '/history': return <History user={user} />
     case '/settings': return <Settings user={user} onLoggedOut={() => setUser(null)} />
     default: return <Home user={user} />
   }
