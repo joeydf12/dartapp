@@ -1,8 +1,9 @@
 // Alle communicatie met de database loopt via de dartapp_*-functies. Geen
 // rechtstreekse tabeltoegang, geen Supabase-accounts.
 import { createClient } from '@supabase/supabase-js'
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js'
 
-const sb = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, {
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 })
 
